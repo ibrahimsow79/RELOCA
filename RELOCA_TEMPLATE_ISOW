@@ -1,0 +1,572 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description" : "Reloca template designed by isow : a VPC + one public subnet + 1 NAT instance + 1 Private Subnet + Private Instance connect to NAT instance then to Private + outpout" ,
+  
+  "Parameters": {
+    "VPCCIDR": {
+      "Description": " Enter CIDR Block for VPC",
+      "Type": "String",
+      "Default": "10.200.0.0/16",
+      "AllowedValues": [ "10.200.0.0/16", "10.210.0.0/16", "10.220.0.0/16", "10.230.0.0/16" ]
+    },
+	
+    "PublicSubnet1Param": {
+      "Description": " Enter Public Subnet 1",
+      "Type": "String",
+      "Default": "10.200.10.0/24",
+      "AllowedValues": [ "10.200.10.0/24" ]
+    },
+	"PublicSubnet2Param": {
+      "Description": " Enter Public Subnet 2",
+      "Type": "String",
+      "Default": "10.200.15.0/24",
+      "AllowedValues": [ "10.200.15.0/24" ]
+    },
+	
+	"PrivateSubnet1Param": {
+      "Description": " Enter Private Subnet 1",
+      "Type": "String",
+      "Default": "10.200.50.0/24",
+      "AllowedValues": [ "10.200.50.0/24" ]
+    },
+	
+	"PrivateSubnet2Param": {
+      "Description": " Enter Private Subnet 2",
+      "Type": "String",
+      "Default": "10.200.55.0/24",
+      "AllowedValues": [ "10.200.55.0/24" ]
+    },
+	
+	"InstanceType": {
+      "Description": "WebServer EC2 instance type",
+      "Type": "String",
+      "Default": "t2.small",
+      "AllowedValues": [ "t1.micro", "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"]
+,
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+	
+	"KeyPairParam": {
+      "Description": " Enter the Name of an EC2 KeyPair to enable SSH access to the instance.",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+	  "Default" : "ISOW_KEY_PAIR",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    },
+ 
+    "VolumeName" : {
+      "Description" : "The name to be used for the EFS volume",
+      "Type": "String",
+      "MinLength": "1",
+      "Default": "myEFSvolume"
+    },
+	
+    "MountPoint" : {
+      "Description" : "The Linux mount point for the EFS volume",
+      "Type": "String",
+      "MinLength": "1",
+      "Default": "myEFSvolume"
+    }	
+  },
+  "Mappings" : {   
+
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "PV64"   },
+      "t2.nano"     : { "Arch" : "HVM64"  },
+      "t2.micro"    : { "Arch" : "HVM64"  },
+      "t2.small"    : { "Arch" : "HVM64"  },
+      "t2.medium"   : { "Arch" : "HVM64"  },
+      "t2.large"    : { "Arch" : "HVM64"  },
+      "m1.small"    : { "Arch" : "PV64"   },
+      "m1.medium"   : { "Arch" : "PV64"   },
+      "m1.large"    : { "Arch" : "PV64"   },
+      "m1.xlarge"   : { "Arch" : "PV64"   },
+      "m2.xlarge"   : { "Arch" : "PV64"   },
+      "m2.2xlarge"  : { "Arch" : "PV64"   },
+      "m2.4xlarge"  : { "Arch" : "PV64"   },
+      "m3.medium"   : { "Arch" : "HVM64"  },
+      "m3.large"    : { "Arch" : "HVM64"  },
+      "m3.xlarge"   : { "Arch" : "HVM64"  },
+      "m3.2xlarge"  : { "Arch" : "HVM64"  },
+      "m4.large"    : { "Arch" : "HVM64"  },
+      "m4.xlarge"   : { "Arch" : "HVM64"  },
+      "m4.2xlarge"  : { "Arch" : "HVM64"  },
+      "m4.4xlarge"  : { "Arch" : "HVM64"  },
+      "m4.10xlarge" : { "Arch" : "HVM64"  },
+      "c1.medium"   : { "Arch" : "PV64"   },
+      "c1.xlarge"   : { "Arch" : "PV64"   },
+      "c3.large"    : { "Arch" : "HVM64"  },
+      "c3.xlarge"   : { "Arch" : "HVM64"  },
+      "c3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c3.4xlarge"  : { "Arch" : "HVM64"  },
+      "c3.8xlarge"  : { "Arch" : "HVM64"  },
+      "c4.large"    : { "Arch" : "HVM64"  },
+      "c4.xlarge"   : { "Arch" : "HVM64"  },
+      "c4.2xlarge"  : { "Arch" : "HVM64"  },
+      "c4.4xlarge"  : { "Arch" : "HVM64"  },
+      "c4.8xlarge"  : { "Arch" : "HVM64"  },
+      "g2.2xlarge"  : { "Arch" : "HVMG2"  },
+      "g2.8xlarge"  : { "Arch" : "HVMG2"  },
+      "r3.large"    : { "Arch" : "HVM64"  },
+      "r3.xlarge"   : { "Arch" : "HVM64"  },
+      "r3.2xlarge"  : { "Arch" : "HVM64"  },
+      "r3.4xlarge"  : { "Arch" : "HVM64"  },
+      "r3.8xlarge"  : { "Arch" : "HVM64"  },
+      "i2.xlarge"   : { "Arch" : "HVM64"  },
+      "i2.2xlarge"  : { "Arch" : "HVM64"  },
+      "i2.4xlarge"  : { "Arch" : "HVM64"  },
+      "i2.8xlarge"  : { "Arch" : "HVM64"  },
+      "d2.xlarge"   : { "Arch" : "HVM64"  },
+      "d2.2xlarge"  : { "Arch" : "HVM64"  },
+      "d2.4xlarge"  : { "Arch" : "HVM64"  },
+      "d2.8xlarge"  : { "Arch" : "HVM64"  },
+      "hi1.4xlarge" : { "Arch" : "HVM64"  },
+      "hs1.8xlarge" : { "Arch" : "HVM64"  },
+      "cr1.8xlarge" : { "Arch" : "HVM64"  },
+      "cc2.8xlarge" : { "Arch" : "HVM64"  }
+    },
+	
+	"AWSRegionArch2AMI" : {
+      "us-east-1"        : {"PV64" : "ami-2a69aa47", "HVM64" : "ami-6869aa05", "HVMG2" : "ami-2e5e9c43"},
+      "us-west-2"        : {"PV64" : "ami-7f77b31f", "HVM64" : "ami-7172b611", "HVMG2" : "ami-83b770e3"},
+      "us-west-1"        : {"PV64" : "ami-a2490dc2", "HVM64" : "ami-31490d51", "HVMG2" : "ami-fd76329d"},
+      "eu-west-1"        : {"PV64" : "ami-4cdd453f", "HVM64" : "ami-f9dd458a", "HVMG2" : "ami-b9bd25ca"},
+      "eu-central-1"     : {"PV64" : "ami-6527cf0a", "HVM64" : "ami-ea26ce85", "HVMG2" : "ami-7f04ec10"},
+      "ap-northeast-1"   : {"PV64" : "ami-3e42b65f", "HVM64" : "ami-374db956", "HVMG2" : "ami-e0ee1981"},
+      "ap-northeast-2"   : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-2b408b45", "HVMG2" : "NOT_SUPPORTED"},
+      "ap-southeast-1"   : {"PV64" : "ami-df9e4cbc", "HVM64" : "ami-a59b49c6", "HVMG2" : "ami-0cb5676f"},
+      "ap-southeast-2"   : {"PV64" : "ami-63351d00", "HVM64" : "ami-dc361ebf", "HVMG2" : "ami-a71c34c4"},
+      "ap-south-1"       : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-ffbdd790", "HVMG2" : "ami-f5b2d89a"},
+      "sa-east-1"        : {"PV64" : "ami-1ad34676", "HVM64" : "ami-6dd04501", "HVMG2" : "NOT_SUPPORTED"},
+      "cn-north-1"       : {"PV64" : "ami-77559f1a", "HVM64" : "ami-8e6aa0e3", "HVMG2" : "NOT_SUPPORTED"}
+    }
+
+  },
+  
+  "Resources": {
+    "LabVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+	     "CidrBlock" : {"Ref" : "VPCCIDR"},
+          "Tags" : [ {"Key" : "Name", "Value" : "LabVPC"}, {"Key" : "Project", "Value" : "Reloca"} ]
+	  }
+    },
+	
+    "LabVPCGateway": {
+      "DependsOn" : [ "LabVPC" ],
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": { 
+	  "Tags" : [ {"Key" : "Name", "Value" : "LabVPCGateway"}, {"Key" : "Project", "Value" : "Reloca"} ]
+		}
+    },
+	
+	"AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+	  "DependsOn" : [ "LabVPCGateway" ],
+      "Properties": {
+        "InternetGatewayId": {"Ref": "LabVPCGateway"},
+        "VpcId": {"Ref": "LabVPC"}
+      }
+	 },
+	 
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+	  "DependsOn": [ "AttachGateway" ],
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+        "CidrBlock": { "Ref": "PublicSubnet1Param"},
+        "AvailabilityZone": {"Fn::Select": [ "0", { "Fn::GetAZs": "" } ]},
+        "Tags": [ {"Key": "Name", "Value": "PublicSubnet1" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+    },
+	
+	"PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+	  "DependsOn": [ "AttachGateway" ],
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+        "CidrBlock": { "Ref": "PublicSubnet2Param"},
+        "AvailabilityZone": {"Fn::Select": [ "1", { "Fn::GetAZs": "" } ]},
+        "Tags": [ {"Key": "Name", "Value": "PublicSubnet2" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+    },
+	
+	"PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+		"Tags" : [ {"Key": "Name", "Value" : "PublicRouteTable" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+   },
+   
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+	  "DependsOn": [ "AttachGateway" ],
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable"},
+		"DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId": { "Ref": "LabVPCGateway" }
+      }    
+    },
+	
+	"PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "SubnetId": { "Ref": "PublicSubnet1" }
+      }
+	 },
+	 
+	"PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "SubnetId": { "Ref": "PublicSubnet2" }
+      }
+	 },	
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+	  "DependsOn": [ "AttachGateway" ],
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+        "CidrBlock": { "Ref": "PrivateSubnet1Param"},
+        "AvailabilityZone": {"Fn::Select": [ "0", { "Fn::GetAZs": "" } ]},
+        "Tags": [ {"Key": "Name", "Value": "PrivateSubnet1" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+    },
+	
+	"PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+	  "DependsOn": [ "AttachGateway" ],
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+        "CidrBlock": { "Ref": "PrivateSubnet2Param"},
+        "AvailabilityZone": {"Fn::Select": [ "1", { "Fn::GetAZs": "" } ]},
+        "Tags": [ {"Key": "Name", "Value": "PrivateSubnet2" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+    },
+	
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+		"Tags" : [ {"Key": "Name", "Value" : "PrivateRouteTable" },{"Key" : "Project", "Value" : "Reloca"} ]
+      }
+    },
+	
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+	  "DependsOn": [ "NAT" ],
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable"},
+		"DestinationCidrBlock" : "0.0.0.0/0",
+        "InstanceId": { "Ref": "NAT" }
+      }    
+    },
+   
+	"PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "SubnetId": { "Ref": "PrivateSubnet1" }
+      }
+	 },
+	 
+	 "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "SubnetId": { "Ref": "PrivateSubnet2" }
+      }
+	 },
+	 
+	"NATSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DependsOn": ["LabVPC", "AttachGateway"],
+      "Properties": {
+        "GroupDescription": "Enable internal access to the NAT device",
+        "VpcId": {"Ref": "LabVPC"},
+		"Tags" : [ {"Key" : "Name", "Value":"NATSecurityGroup"} , {"Key" : "Project", "Value" : "Reloca"} ],
+		"SecurityGroupIngress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "63335",
+            "CidrIp": "0.0.0.0/0"
+          }
+		 ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "CidrIp": "0.0.0.0/0"
+          }		  
+       ]
+      }
+    },
+	 
+	"PrivateSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "DependsOn": ["LabVPC", "AttachGateway"],
+      "Properties": {
+        "GroupDescription": "SecurityGroup for the Private Instance",
+        "VpcId": {"Ref": "LabVPC"},
+		"Tags" : [ {"Key" : "Name", "Value":"Private Instance Security Group"} , {"Key" : "Project", "Value" : "Reloca"} ],
+		"SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "SourceSecurityGroupId": { "Ref" : "NATSecurityGroup" }
+          }
+		 ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "CidrIp": "0.0.0.0/0"
+          }		  
+        ]
+      }
+    },
+  
+	"MountTargetSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": { "Ref": "LabVPC" },
+        "GroupDescription": "Security group for mount target",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "2049",
+            "ToPort": "2049",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+	
+	"FileSystem": {
+      "Type": "AWS::EFS::FileSystem",
+      "Properties": {
+        "PerformanceMode": "generalPurpose",
+        "FileSystemTags": [ { "Key": "Name", "Value": { "Ref" : "VolumeName" } } ]
+      }
+    },
+	
+    "MountTarget1": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": { "Ref": "FileSystem" },
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "SecurityGroups": [ { "Ref": "MountTargetSecurityGroup" } ]        
+      }
+    },
+	
+	"MountTarget2": {
+      "Type": "AWS::EFS::MountTarget",
+      "Properties": {
+        "FileSystemId": { "Ref": "FileSystem" },
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "SecurityGroups": [ { "Ref": "MountTargetSecurityGroup" } ]        
+      }
+    },
+	 
+	"WaitHandle01": {
+      "Type": "AWS::CloudFormation::WaitConditionHandle",
+      "Properties": {}
+    },
+	
+    "WaitCondition01": {
+      "Type": "AWS::CloudFormation::WaitCondition",
+      "DependsOn": ["NAT", "WaitHandle01"],
+      "Properties": {
+        "Handle": { "Ref": "WaitHandle01" },
+        "Timeout": "900"
+      }
+    },
+ 
+    "NAT": {
+      "Type": "AWS::EC2::Instance",
+      "DependsOn": ["LabVPC", "AttachGateway", "PublicSubnet1", "NATSecurityGroup"],
+      "Properties": {
+        "ImageId": { "Fn::FindInMap": [ "AWSRegionArch2AMI", { "Ref": "AWS::Region" },
+            { "Fn::FindInMap": [ "AWSInstanceType2Arch", { "Ref": "InstanceType" }, "Arch" ] } ] },
+		"KeyName" : { "Ref" : "KeyPairParam" },
+        "InstanceType": { "Ref": "InstanceType" },
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": "true",
+            "SubnetId": {"Ref": "PublicSubnet1"},
+            "GroupSet": [{"Ref": "NATSecurityGroup"}
+            ]
+          }
+        ],
+        "SourceDestCheck": "false",
+        "Tags": [ {"Key": "Name", "Value": "NATInstance" }, {"Key" : "Project", "Value" : "Reloca"} ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum -y update\n",
+                "echo 1 > /proc/sys/net/ipv4/ip_forward\n",
+                "echo 0 > /proc/sys/net/ipv4/conf/eth0/send_redirects\n",
+                "/sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE\n",
+                "/sbin/iptables-save > /etc/sysconfig/iptables\n",
+                "mkdir -p /etc/sysctl.d/\n",
+                "cat <<EOF > /etc/sysctl.d/nat.conf\n",
+                "net.ipv4.ip_forward = 1\n",
+                "net.ipv4.conf.eth0.send_redirects = 0\n",
+                "EOF\n",
+                "/opt/aws/bin/cfn-signal -s true '",
+                { "Ref": "WaitHandle01" },
+                "'\n"
+              ]
+            ]
+          } 
+        }
+      }
+    },
+	
+	"PrivateInstance1": {
+      "Type": "AWS::EC2::Instance",
+	  "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+			  "yum" : { "nfs-utils" : [] }
+            }, 
+            "commands" : {
+		      "01_creatdir1" : {
+		       "command" : { "Fn::Join" : ["", ["mkdir /", { "Ref" : "MountPoint" } ] ] }
+            }   
+          }
+        }
+	   }
+	  },
+      "DependsOn": ["LabVPC", "AttachGateway", "PrivateSubnet1", "NATSecurityGroup"],
+      "Properties": {
+        "ImageId": { "Fn::FindInMap": [ "AWSRegionArch2AMI", { "Ref": "AWS::Region" },
+            { "Fn::FindInMap": [ "AWSInstanceType2Arch", { "Ref": "InstanceType" }, "Arch" ] } ] },
+		"KeyName" : { "Ref" : "KeyPairParam" },
+        "InstanceType": { "Ref": "InstanceType" },
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": "false",
+            "SubnetId": {"Ref": "PrivateSubnet1"},
+            "GroupSet": [{"Ref": "PrivateSecurityGroup"} ]
+          }
+        ],
+        "SourceDestCheck": "false",
+        "Tags": [ {"Key": "Name", "Value": "PrivateInstance1" }, {"Key" : "Project", "Value" : "Reloca"} ],
+		"UserData" : { 
+		  "Fn::Base64" : { 
+		    "Fn::Join" : [
+			  "", 
+			  [
+               "#!/bin/bash  -xe\n",
+               "yum -y update\n",
+			   "yum update -y aws-cfn-bootstrap\n",
+			 
+			   "# Execuction de la Metadata\n",
+               "/opt/aws/bin/cfn-init -v ",
+               " --stack ", { "Ref" : "AWS::StackName" },
+               " --resource PrivateInstance1 ",
+               " --region ", { "Ref" : "AWS::Region" }, "\n",
+			 
+			   "# Status du signal cf-init(rajouter la creation policy après les tests)\n",
+               "/opt/aws/bin/cfn-signal -e $? ",
+               " --stack ", { "Ref" : "AWS::StackName" },
+               " --resource PrivateInstance1",
+               " --region ", { "Ref" : "AWS::Region" }, "\n"
+             ]
+		  ]
+		}
+	   }
+	  }	   
+     },
+	
+    "PrivateInstance2": {
+      "Type": "AWS::EC2::Instance",
+	  "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+			  "yum" : { "nfs-utils" : [] }
+            }, 
+            "commands" : {
+		      "01_creatdir2" : {
+		        "command" : { "Fn::Join" : ["", ["mkdir /", { "Ref" : "MountPoint" } ] ] }
+              }
+            }
+	      }
+		} 
+	  },
+      "DependsOn": ["LabVPC", "AttachGateway", "PrivateSubnet1", "NATSecurityGroup"],
+      "Properties": {
+        "ImageId": { "Fn::FindInMap": [ "AWSRegionArch2AMI", { "Ref": "AWS::Region" },
+            { "Fn::FindInMap": [ "AWSInstanceType2Arch", { "Ref": "InstanceType" }, "Arch" ] } ] },
+		"KeyName" : { "Ref" : "KeyPairParam" },
+        "InstanceType": { "Ref": "InstanceType" },
+        "NetworkInterfaces": [
+          {
+            "DeviceIndex": "0",
+            "AssociatePublicIpAddress": "false",
+            "SubnetId": {"Ref": "PrivateSubnet2"},
+            "GroupSet": [{"Ref": "PrivateSecurityGroup"} ]
+          }
+        ],
+        "SourceDestCheck": "false",
+        "Tags": [ {"Key": "Name", "Value": "PrivateInstance2" }, {"Key" : "Project", "Value" : "Reloca"} ],
+		"UserData" : { 
+		  "Fn::Base64" : { 
+		    "Fn::Join" : [
+			  "", 
+			  [
+               "#!/bin/bash  -xe\n",
+               "yum -y update\n",
+			   "yum update -y aws-cfn-bootstrap\n",
+			 
+			   "# Execution de la Metadata\n",
+               "/opt/aws/bin/cfn-init -v ",
+               " --stack ", { "Ref" : "AWS::StackName" },
+               " --resource PrivateInstance2",
+               " --region ", { "Ref" : "AWS::Region" }, "\n",
+			 
+			   "# Status du signal cf-init(rajouter la creation policy après les tests)\n",
+               "/opt/aws/bin/cfn-signal -e $? ",
+               " --stack ", { "Ref" : "AWS::StackName" },
+               " --resource PrivateInstance2",
+               " --region ", { "Ref" : "AWS::Region" }, "\n"
+             ]
+		  ]
+		}
+	   }
+	  }	   
+     }
+    },	
+    
+	"Outputs" : {
+      "PublicIPNAT" : {
+       "Description" : "Adresse Publique de la NATInstance",
+       "Value" : { "Fn::GetAtt" : [ "NAT", "PublicIp" ] } 
+	  },
+	  "PrivateIPInstance1" : {
+       "Description" : "Adresse Privee 1",
+       "Value" : { "Fn::GetAtt" : [ "PrivateInstance1", "PrivateIp" ]} 
+      },
+	  "PrivateIPInstance2" : {
+       "Description" : "Adresse Privee 2",
+       "Value" : { "Fn::GetAtt" : [ "PrivateInstance2", "PrivateIp" ]} 
+      },
+      "FileSystemID" : {
+       "Description" : "File system ID",
+       "Value" :  { "Ref" : "FileSystem" }
+    }	
+  }  
+}
